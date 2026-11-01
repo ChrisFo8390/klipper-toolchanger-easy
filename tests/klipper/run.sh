@@ -33,11 +33,15 @@ if [ -n "$(git -C "${KLIPPER}" status --porcelain --untracked-files=no)" ]; then
     fail "Klipper has changes to tracked files"
 fi
 cp "${REPO}/tests/klipper/testing.py" "${KLIPPER}/klippy/extras/testing.py"
-cp "${REPO}"/tests/kalico/ktce_basic.cfg "${REPO}"/tests/kalico/ktce_easy.cfg "${WORK}/"
+cp "${REPO}"/tests/kalico/ktce_basic.cfg "${REPO}"/tests/kalico/ktce_easy.cfg "${REPO}"/tests/kalico/ktce_noprobe.cfg "${WORK}/"
 cp "${CONFIG}/toolchanger/tools/example_T0.cfg" "${CONFIG}/toolchanger/tools/T0.cfg"
 sed -i 's/^canbus_uuid:.*/serial: \/dev\/ttyACM1/' "${CONFIG}/toolchanger/tools/T0.cfg"
 printf '[include ktce_basic.cfg]\n\n[testing]\n' > "${WORK}/klipper_basic.cfg"
 printf '[include ktce_easy.cfg]\n\n[testing]\n' > "${WORK}/klipper_easy.cfg"
+printf '[include ktce_noprobe.cfg]
+
+[testing]
+' > "${WORK}/klipper_noprobe.cfg"
 
 run_klippy() {
     local name="$1" log="${WORK}/$1.log" status
@@ -61,6 +65,9 @@ run_klippy basic -d "${DICTDIR}/atmega2560.dict"
 
 step "KTC-E on Klipper: easy-additions configuration from install.sh"
 run_klippy easy -d "${DICTDIR}/atmega2560.dict" -d "EBBT0=${DICTDIR}/stm32g0b1.dict"
+
+step "KTC-E on Klipper without tool probes: tool changes and CALIBRATE_ALL_OFFSETS"
+run_klippy noprobe -d "${DICTDIR}/atmega2560.dict"
 
 step "Uninstall"
 KLIPPER_PATH="${KLIPPER}" INSTALL_PATH="${REPO}" CONFIG_PATH="${CONFIG}" \
