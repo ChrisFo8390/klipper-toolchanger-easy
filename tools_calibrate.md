@@ -83,6 +83,29 @@ Kalico has a `tools_calibrate` of its own, which the installer keeps. It has the
 `TOOL_CALIBRATE_PROBE_OFFSET`, and no `probe` option. To use this one instead, see [kalico.md](kalico.md#tools_calibrate-is-kalicos-own).
 In macros read the result as `printer.tools_calibrate.last_result[0]`, `[1]`, `[2]` (x, y, z), that works with both.
 
+### Cleaning the nozzles with a brush in CALIBRATE_ALL_OFFSETS
+
+`CALIBRATE_ALL_OFFSETS` picks up every tool, heats it to 150 C and measures it on the calibration probe. A hook lets you
+clean the hot nozzle first. `_CALIBRATION_CLEAN_NOZZLE` is called for every tool once it is picked up and its heater is on,
+before it moves over the probe, and does nothing until you override it in `toolchanger-config.cfg`. It gets
+`T` (tool number), `EXTRUDER` (name of its extruder) and `TEMP` (150).
+
+```
+[gcode_macro _CALIBRATION_CLEAN_NOZZLE]
+gcode:
+    G90
+    G0 Z{printer["gcode_macro _CALIBRATION_SWITCH"].z} F10000
+    TEMPERATURE_WAIT SENSOR={params.EXTRUDER} MINIMUM={params.TEMP}
+    CLEAN_NOZZLE
+```
+
+* Go to a safe Z before moving in XY, the hook does not know where the toolhead is. The height of the calibration switch
+  is a good choice, `CALIBRATE_MOVE_OVER_PROBE` moves at that height too.
+* Wait for the temperature in the hook, the brush works on a hot nozzle. The macro waits again before measuring,
+  which is instant when the nozzle is hot.
+* Leave the nozzle at `TEMP` for the measurement. The length of the nozzle depends on its temperature, so all tools must be
+  measured at the same one.
+
 ### Clean your nozzles 
 
 The calibration accuracy is as good as your nozzles are clean. 

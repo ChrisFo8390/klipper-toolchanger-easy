@@ -190,6 +190,7 @@ Add the following to your `printer.cfg`
 ```
 
 ## Changelog
+* 2026.11.2 - `CALIBRATE_ALL_OFFSETS` calls the hook `_CALIBRATION_CLEAN_NOZZLE` for every tool before it is measured, to clean the hot nozzle on a brush, see [tools_calibrate.md](tools_calibrate.md). It does nothing by default. The heater of tool 0 now starts before it moves over the probe, and the macro waits for the extruder of tool 0, not for the one that was active when the macro started.
 * 2026.11.1 - Kalico support: the installer no longer replaces Kalico's own `tools_calibrate.py` (Kalico stays updatable), tool probe modules for Kalico's probe code, see [kalico.md](kalico.md).
 * 2026.1.25 - Example script for camera tool alignment.
 * 2025.12.26 - **Breaking change** Stop using Gcode offset for tool offsets. Uses a dedicated gcode transform instead.

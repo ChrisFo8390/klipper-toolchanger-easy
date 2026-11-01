@@ -18,6 +18,9 @@ ASSERT TEST='{printer.toolchanger.tool_number == 0}'
 # Calibrate all tools: T0 locates the sensor, the others measure their offset to it
 CALIBRATE_ALL_OFFSETS
 ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+# ... with the brush hook called once per tool, with the extruder and the temperature
+ASSERT TEST='{printer["gcode_macro AFC_BRUSH"].count == 2}'
+ASSERT TEST='{printer["gcode_macro _CALIBRATION_CLEAN_NOZZLE"].calls == "T0=extruder@150,T1=extruder1@150,"}'
 # ... and the offset of T1 was handed to the tool to be saved to the configuration
 ASSERT TEST='{"tool T1" in printer.configfile.save_config_pending_items}'
 ASSERT TEST='{printer["tool T1"].gcode_x_offset == printer.tools_calibrate.last_result[0]}'
