@@ -10,8 +10,6 @@ SELECT_TOOL T=0
 ASSERT TEST='{printer.toolchanger.tool_number == 0}'
 CALIBRATE_ALL_OFFSETS
 ASSERT TEST='{printer.toolchanger.tool_number == 0}'
-ASSERT TEST='{printer["gcode_macro AFC_BRUSH"].count == 2}'
-ASSERT TEST='{printer["gcode_macro _CALIBRATION_CLEAN_NOZZLE"].calls == "T0=extruder@150,T1=extruder1@150,"}'
 ASSERT TEST='{"tool T1" in printer.configfile.save_config_pending_items}'
 ASSERT TEST='{printer["tool T1"].gcode_x_offset == printer.tools_calibrate.last_result[0]}'
 ASSERT TEST='{printer["tool T1"].gcode_y_offset == printer.tools_calibrate.last_result[1]}'

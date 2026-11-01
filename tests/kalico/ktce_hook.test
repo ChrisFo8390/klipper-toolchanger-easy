@@ -1,0 +1,11 @@
+# CALIBRATE_ALL_OFFSETS with the hook overridden to brush the hot nozzle: called once
+# per tool with the extruder and the temperature, and the macro still gets through.
+CONFIG ktce_hook.cfg
+DICTIONARY atmega2560.dict
+
+G28
+CALIBRATE_ALL_OFFSETS
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+ASSERT TEST='{"tool T1" in printer.configfile.save_config_pending_items}'
+ASSERT TEST='{printer["gcode_macro AFC_BRUSH"].count == 2}'
+ASSERT TEST='{printer["gcode_macro _CALIBRATION_CLEAN_NOZZLE"].calls == "T0=extruder@150,T1=extruder1@150,"}'

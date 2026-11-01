@@ -131,6 +131,9 @@ expect_klippy_failure() {
 step "KTC-E on Kalico without tool probes (Cartographer, Beacon, ...): tool changes and CALIBRATE_ALL_OFFSETS"
 run_tests test/klippy/ktce_noprobe.test
 
+step "CALIBRATE_ALL_OFFSETS with the hook overridden to brush the hot nozzle (what a user of AFC does)"
+run_tests test/klippy/ktce_hook.test
+
 step "The smaller modules: multi_fan, manual_rail, bed_thermal_adjust"
 run_tests test/klippy/ktce_modules.test
 
