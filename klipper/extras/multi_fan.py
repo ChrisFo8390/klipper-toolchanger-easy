@@ -4,7 +4,12 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 
-from . import fan
+try:
+    from . import fan
+except ImportError:
+    # Kalico loads modules of klippy/plugins as klippy.plugins.<name>, so the
+    # relative import does not find the modules of klippy/extras.
+    from klippy.extras import fan
 
 
 # Part cooler fan that is switchable between multiple fans.

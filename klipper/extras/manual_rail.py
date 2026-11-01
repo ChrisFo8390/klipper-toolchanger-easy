@@ -5,7 +5,12 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import stepper
-from . import force_move
+try:
+    from . import force_move
+except ImportError:
+    # Kalico loads modules of klippy/plugins as klippy.plugins.<name>, so the
+    # relative import does not find the modules of klippy/extras.
+    from klippy.extras import force_move
 
 # Like ManualStepper, but is a multi stepper rail with min/max and homing.
 class ManualRail:
