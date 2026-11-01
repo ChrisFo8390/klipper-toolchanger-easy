@@ -1,3 +1,7 @@
+## Kalico: Mainsail does not offer updates for Kalico any more
+
+That is the old installer. Pull this repository and run `./install.sh` again, it cleans up. See [kalico.md](kalico.md#already-installed-with-the-old-installer).
+
 ## Upgrade from the old Klipper-Toolchanger-Easy
 
 Run the following: 

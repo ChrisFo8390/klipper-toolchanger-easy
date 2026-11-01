@@ -77,6 +77,12 @@ probe: probe
      (optional name of the nozzle probe to use)
 ```
 
+### On Kalico
+
+Kalico has a `tools_calibrate` of its own, which the installer keeps. It has the same commands, apart from
+`TOOL_CALIBRATE_PROBE_OFFSET`, and no `probe` option. To use this one instead, see [kalico.md](kalico.md#tools_calibrate-is-kalicos-own).
+In macros read the result as `printer.tools_calibrate.last_result[0]`, `[1]`, `[2]` (x, y, z), that works with both.
+
 ### Clean your nozzles 
 
 The calibration accuracy is as good as your nozzles are clean. 

@@ -28,6 +28,9 @@ samples_tolerance: 0.02
 samples_tolerance_retries: 3    
 ```
 
+On Kalico the same configuration works, see [kalico.md](kalico.md). `[tool_probe_endstop]` is then the default probe
+(`probe`), and the tool probes can be addressed by name too: `PROBE PROBE=T1`, `QUERY_PROBE PROBE=T1`, `LIST_PROBES`.
+
 # Status
 
 ## tool_probe_endstop 
