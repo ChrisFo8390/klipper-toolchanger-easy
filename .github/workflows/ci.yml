@@ -14,7 +14,7 @@ env:
 jobs:
   installer:
     name: install.sh
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Syntax of the scripts and modules
@@ -30,7 +30,7 @@ jobs:
   # The firmware dictionaries klippy needs to run, from the public CI image of
   # Kalico. Only the dictionaries are used from the image.
   dictionaries:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Extract the dictionaries
         run: |
@@ -46,7 +46,7 @@ jobs:
   kalico:
     name: Kalico ${{ matrix.kalico }}, Python ${{ matrix.python }}
     needs: dictionaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -88,7 +88,7 @@ jobs:
   klipper:
     name: Klipper master, Python ${{ matrix.python }}
     needs: dictionaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -126,7 +126,7 @@ jobs:
   upstream:
     name: Unmodified upstream on Kalico (does not work)
     needs: dictionaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
