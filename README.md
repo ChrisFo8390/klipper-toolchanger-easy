@@ -1,13 +1,11 @@
 # klipper-toolchanger-easy, Kalico edition
 
-A fork of [jwellman80/klipper-toolchanger-easy](https://github.com/jwellman80/klipper-toolchanger-easy) ("KTC-E"), which
-combines the configuration, macros and Python modules of [Viesturz/klipper-toolchanger](https://github.com/viesturz/klipper-toolchanger)
-for StealthChanger style toolchangers. This fork makes KTC-E work on **Kalico** as well as on Klipper, without stopping
-Mainsail from updating Kalico.
+A fork of [jwellman80/klipper-toolchanger-easy](https://github.com/jwellman80/klipper-toolchanger-easy) ("KTC-E"), the
+configuration, macros and Python modules for StealthChanger style toolchangers in one repository. This fork makes KTC-E
+work on **Kalico** as well as on Klipper, and **Kalico stays updatable in Mainsail**.
 
-The Kalico support lives in the branch `kalico-plugins` of
-[ChrisFo8390/klipper-toolchanger-easy](https://github.com/ChrisFo8390/klipper-toolchanger-easy). The name is historical,
-it is the branch you use.
+Use the branch `kalico-plugins` of [ChrisFo8390/klipper-toolchanger-easy](https://github.com/ChrisFo8390/klipper-toolchanger-easy).
+The name is historical, it is the branch you use.
 
 * [What is different from the normal KTC-E](#what-is-different-from-the-normal-ktc-e)
 * [Do I need this?](#do-i-need-this)
@@ -22,29 +20,29 @@ it is the branch you use.
 
 | | Normal KTC-E | This fork |
 | --- | --- | --- |
-| **Updating Kalico in Mainsail** | Stops working. The installer replaces Kalico's own `klippy/extras/tools_calibrate.py` with a symlink, Moonraker sees a changed repository (`-dirty`) and refuses to update it. | Works. The installer never replaces a file that git tracks, and puts back what an old install replaced. |
-| **Installer** | Links every module into `klippy/extras`, asks one question. | Same places, but protects tracked files, migrates old installs, and reports at the end whether Moonraker will accept Klipper / Kalico as clean. New options: `--z-probe`, `--no-restart`, `--no-requirements`, `--target`, `--uninstall`, `--check`, `--override-tools-calibrate`. Safe to run again. |
-| **Tool probes (TAP per tool) on Kalico** | `tool_probe` and `tool_probe_endstop` do not load: they are written for the probe code of Klipper (2024 and later), Kalico kept the classic one. | They work. On Kalico `[tool_probe_endstop]` is the default probe and hands `PROBE`, bed mesh, Z tilt, QGL, ... to the probe of the active tool. Homing Z on a tool probe sets Z to the `z_offset` of that probe, as Kalico does for `[probe]`. |
-| **`tools_calibrate` on Kalico** | Replaces Kalico's module. | Kalico's own module is used (same idea, same commands). Ours can be used instead with `--override-tools-calibrate`. |
-| **Offset macros** | Read `tools_calibrate.last_x_result` and friends, which Kalico's module does not have. | Read `last_result[0..2]`, which both modules have. |
-| **Example tool configs** | No `sense_resistor` for the toolhead TMC2209. | Set (0.110), Kalico has no default for it. |
-| **On Klipper** | | The code for Klipper's probe API is the original code, added next to it is the one for Kalico. The installer behaves as before. |
-| **Tests** | None. | Installer tests on fake trees, and klippy against a simulated MCU on Kalico and Klipper, on every push. See [what is tested](#what-is-tested). |
+| **Updating Kalico in Mainsail** | Stops working. The installer replaces Kalico's own `klippy/extras/tools_calibrate.py` with a symlink, Moonraker sees a changed repository (`-dirty`) and refuses to update it. | Works. The installer never replaces a file that git tracks, and restores what an old install replaced. |
+| **Installer** | Links every module into `klippy/extras`. | Same places. Also migrates old installs, tells you whether Moonraker sees Klipper / Kalico as clean, can be run again, and has options (`--z-probe`, `--no-restart`, `--uninstall`, `--check`, ...: `./install.sh --help`). |
+| **Tool probes (TAP per tool) on Kalico** | `tool_probe` and `tool_probe_endstop` do not load: they are written for the probe code of Klipper 2024 and later, Kalico kept the classic one. | They work. `[tool_probe_endstop]` is the default probe and hands `PROBE`, bed mesh, Z tilt, QGL, ... to the probe of the active tool. Homing Z sets Z to the `z_offset` of that probe, as Kalico does for `[probe]`. |
+| **`tools_calibrate` on Kalico** | Replaces Kalico's module. | Kalico's own module is used. Ours can be used instead with `--override-tools-calibrate`. |
+| **`CALIBRATE_ALL_OFFSETS`** | Reads `tools_calibrate.last_x_result` and friends, which Kalico's module does not have. | Reads `last_result[0..2]`, which both modules have. New hook `_CALIBRATION_CLEAN_NOZZLE` (Klipper and Kalico): clean every hot nozzle on a brush before it is measured. It does nothing unless you override it, see [tools_calibrate.md](tools_calibrate.md#cleaning-the-nozzles-with-a-brush-in-calibrate_all_offsets). |
+| **Example tool configs** | No `sense_resistor` for the toolhead TMC2209. | Set to 0.110, Kalico has no default for it. |
+| **On Klipper** | | The original code for Klipper's probe API, the code for Kalico next to it. |
+| **Tests** | None. | Installer tests and klippy against a simulated MCU on Kalico and Klipper, on every push, see [what is tested](#what-is-tested). |
 
-The background, the exact failure messages and the design are in [kalico.md](kalico.md).
+Background, failure messages and design: [kalico.md](kalico.md).
 
 ## Do I need this?
 
-* **Kalico, installed with the normal KTC-E:** yes. Mainsail does not offer Kalico updates because of it, and if you use
-  a tool probe per tool, Kalico does not even start with the `[tool_probe]` sections.
-* **Kalico, fresh:** yes, use this fork from the start.
-* **Klipper:** no difference in what runs. You can use this fork, nothing to adjust.
+* **Kalico with the normal KTC-E:** yes. Mainsail does not offer Kalico updates, and with a tool probe per tool Kalico
+  does not even start.
+* **Kalico, fresh:** yes.
+* **Klipper:** no difference in what runs, nothing to adjust. You can use the fork, e.g. for the hook.
 
 ## What you have to adjust
 
 ### Everyone
 
-* Point your `moonraker.conf` at the fork, if you let Moonraker update this repository:
+* If Moonraker updates this repository, point `moonraker.conf` at the fork:
   ```
   [update_manager klipper-toolchanger-easy]
   type: git_repo
@@ -55,32 +53,36 @@ The background, the exact failure messages and the design are in [kalico.md](kal
   primary_branch: kalico-plugins
   ```
   then `sudo systemctl restart moonraker` and refresh the Update Manager.
-* After an update of this repository that adds a Python module, run `./install.sh --z-probe none` again, as before.
 
 ### Kalico only
 
-* **`[tools_calibrate]`:** remove the `probe:` option if you have it. Kalico's module does not read it, and Kalico (like
-  Klipper) refuses options that nothing reads. `TOOL_CALIBRATE_PROBE_OFFSET` does not exist in Kalico's module: do you
-  need it? Then use `--override-tools-calibrate` (see [kalico.md](kalico.md#tools_calibrate-is-kalicos-own)).
+* **`[tools_calibrate]`:** remove the `probe:` option, Kalico's module does not read it and Kalico refuses options that
+  nothing reads. `TOOL_CALIBRATE_PROBE_OFFSET` does not exist in Kalico's module; if you need it, use
+  `--override-tools-calibrate` ([kalico.md](kalico.md#tools_calibrate-is-kalicos-own)).
 * **Your own macros** that read `printer.tools_calibrate.last_x_result`, `last_y_result`, `last_z_result` or
-  `last_probe_offset`: read `printer.tools_calibrate.last_result[0]`, `[1]`, `[2]` instead. The macros of this repository
-  already do.
-* **TMC drivers:** every `[tmc2209 ...]` (and the other drivers) needs `sense_resistor` on Kalico. Klipper assumes 0.110
-  for the TMC2209. If Kalico complains `Option 'sense_resistor' ... must be specified`, add `sense_resistor: 0.110`.
-* **If you use a tool probe per tool (TAP):**
-  * `z_offset` of every `[tool_probe]` must be reachable by the Z stepper: between its `position_min` and `position_max`.
-    Kalico refuses it at start-up otherwise, as for its own `[probe]`.
-  * There must be no `[probe]` section next to `[tool_probe_endstop]` (as before).
-  * The name of a tool probe is its tool name (`[tool_probe T1]` is `T1`). No `[mcu]` may have that name, otherwise
-    Kalico stops with `Duplicate chip name 'T1'`. Name the toolhead board `EBBT1` or similar.
+  `last_probe_offset`: read `last_result[0]`, `[1]`, `[2]` instead. The macros of this repository already do.
+* **TMC drivers:** every `[tmc2209 ...]` needs `sense_resistor` on Kalico. If it complains `Option 'sense_resistor' ...
+  must be specified`, add `sense_resistor: 0.110` (Klipper's default for the TMC2209).
+* **Tool probe per tool (TAP):**
+  * `z_offset` of every `[tool_probe]` must be within `position_min` and `position_max` of the Z stepper, Kalico refuses
+    it at start-up otherwise.
+  * No `[probe]` next to `[tool_probe_endstop]` (as before).
+  * No `[mcu]` may be named like a tool (`T1`), Kalico stops with `Duplicate chip name 'T1'`. Call the toolhead board
+    `EBBT1` or similar.
   * Z after homing is now the `z_offset` of the probe that homed, like Kalico's `[probe]`. Check your first layer once.
 
-You do not have to change tool configs, the `toolchanger-config.cfg`, your `printer.cfg` includes or your print start macro.
+Tool configs, `toolchanger-config.cfg`, the include in `printer.cfg` and your print start macro stay as they are.
+
+### Optional
+
+* **Clean the hot nozzles in `CALIBRATE_ALL_OFFSETS`:** put your brush macro into the hook `_CALIBRATION_CLEAN_NOZZLE`
+  in `toolchanger-config.cfg` ([tools_calibrate.md](tools_calibrate.md#cleaning-the-nozzles-with-a-brush-in-calibrate_all_offsets)).
+  Without it nothing changes.
 
 ## Moving from the normal KTC-E to this fork
 
-You have the normal KTC-E in `~/klipper-toolchanger-easy`, installed with its `install.sh`. This keeps your configuration
-(`~/printer_data/config/toolchanger/`), tool files and `toolchanger-config.cfg`. Do it while the printer is idle.
+You have the normal KTC-E in `~/klipper-toolchanger-easy`, installed with its `install.sh`. Your configuration
+(`~/printer_data/config/toolchanger/`, tool files, `toolchanger-config.cfg`) is kept. Do it while the printer is idle.
 
 1. Switch the clone to this fork:
    ```
@@ -89,31 +91,30 @@ You have the normal KTC-E in `~/klipper-toolchanger-easy`, installed with its `i
    git fetch origin
    git checkout kalico-plugins
    ```
-   If git refuses because of local changes in that clone, run `git stash` first, or better move your changes to
+   If git refuses because of local changes in the clone, `git stash` them first, or better move them to
    `toolchanger-config.cfg`, which is meant for that.
-2. Run the installer. `--z-probe none` leaves your Z probe configuration alone (otherwise it asks, and links the include and
-   example tool files for the option you choose). `--no-restart` so that you decide when Klipper restarts:
+2. Run the installer. `--z-probe none` leaves your Z probe configuration alone, `--no-restart` lets you decide when
+   Klipper restarts:
    ```
    ./install.sh --z-probe none --no-restart
    ```
-   On Kalico expect `[CLEANUP] restored klippy/extras/tools_calibrate.py from git`, then `tools_calibrate.py skipped`
-   and `[OK] ... Moonraker / Mainsail can update it`.
+   On Kalico expect `[CLEANUP] restored klippy/extras/tools_calibrate.py from git`, `tools_calibrate.py skipped` and
+   `[OK] ... Moonraker / Mainsail can update it`.
 3. Check what Moonraker sees. The first command must print nothing, the second must not end in `-dirty`:
    ```
    git -C ~/klipper status --short --untracked-files=no
    git -C ~/klipper describe --always --tags --long --dirty
    ```
-4. Do the [adjustments](#what-you-have-to-adjust) above, for Kalico mainly the `moonraker.conf` entry and macros that read
+4. Do the [adjustments](#what-you-have-to-adjust), on Kalico mainly the `moonraker.conf` entry and macros that read
    `last_x_result`.
-5. Restart Klipper (`sudo systemctl restart klipper`, or the restart button in Mainsail). If Klipper was in a
-   shutdown state before, use `FIRMWARE_RESTART` instead, a plain restart does not reset a stopped MCU.
+5. Restart Klipper. If it was in a shutdown state before, use `FIRMWARE_RESTART`, a plain restart does not reset a
+   stopped MCU.
 6. Refresh the Update Manager in Mainsail. Kalico should be updatable again.
 
 `./install.sh --check` shows at any time what is linked where and whether the tree is clean. It changes nothing.
 
-If something else on your printer imports these modules, it keeps working: the modules stay in `klippy/extras`, so
-`from extras.toolchanger import ...` (AFC does that) finds them. See [kalico.md](kalico.md#the-plugins-folder) for
-the `--target plugins` alternative and why it is not the default.
+Add-ons that import these modules (AFC: `from extras.toolchanger import ...`) keep working, the modules stay in
+`klippy/extras`. About `--target plugins` and why it is not the default: [kalico.md](kalico.md#the-plugins-folder).
 
 ## Fresh install
 
@@ -137,26 +138,25 @@ git checkout main
 ./install.sh
 ```
 
-The first command removes the links of this repository and restores files of Klipper / Kalico that were replaced. Your
+`--uninstall` removes the links of this repository and restores files of Klipper / Kalico that were replaced, your
 configuration is kept. On Kalico you are then back at the problem this fork solves.
 
 ## What is tested
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push:
+[`ci.yml`](.github/workflows/ci.yml) runs on every push:
 
-* the installer on fake Klipper and Kalico trees (fresh, again, migration, uninstall, ...): checks that git sees no
-  change to a tracked file afterwards,
-* klippy against a simulated MCU on Kalico `main` (Python 3.9 and 3.12, currently v2026.11.00), with the installed
-  configuration: tool probes, Z homing position, probing, bed mesh, Z tilt, tool changes, the macros,
-  `multi_fan`, `manual_rail`, `bed_thermal_adjust`, and the `extras.toolchanger` import of add-ons like AFC,
-* the same on Klipper `master`, for the code path of Klipper's own probe API,
-* what the unmodified upstream does on Kalico (it does not work, the job shows how).
+* the installer on fake Klipper and Kalico trees (fresh, again, migration, uninstall): git must see no change to a
+  tracked file afterwards,
+* klippy against a simulated MCU on Kalico `main` (Python 3.9 and 3.12) and on Klipper `master`, with the installed
+  configuration: tool probes, Z homing, probing, bed mesh, Z tilt, tool changes, `CALIBRATE_ALL_OFFSETS` (with and
+  without a brush in the hook), `multi_fan`, `manual_rail`, `bed_thermal_adjust`, and the `extras.toolchanger` import
+  of add-ons like AFC,
+* the unmodified upstream on Kalico (it does not work, the job shows how).
 
-On a real printer, this fork runs on a Kalico printer with a Cartographer as Z probe and AFC: the installer, the
-migration from the normal KTC-E, updating Kalico from Mainsail afterwards, and the toolchanger modules loading together
-with AFC. **Not tested on a real printer:** the tool probe code on Kalico (TAP per tool), crash detection timing, tool
-detection with several tool probes, QGL, and tool changes on Kalico with this version. These are tested in the
-simulator only. Please report what you find.
+On a real printer (Kalico, Cartographer as Z probe, AFC) this fork was run through: the installer, the migration from the
+normal KTC-E, updating Kalico from Mainsail afterwards, and the modules loading together with AFC. **Simulator only:**
+the tool probe code on Kalico (TAP per tool), crash detection timing, tool detection with several tool probes, QGL, tool
+changes, and the offsets that `CALIBRATE_ALL_OFFSETS` measures. Please report what you find.
 
 ## Please Read this before starting!
 The purpose of (yet another) fork of the Viesturz/klipper-toolchanger repo is to attempt to simplify the installation for StealthChanger users.  This repo combines the configuration, macros, and Python into a single repo.  It also outlines patterns for overriding configuration to ease installation and allow easier updates. 
