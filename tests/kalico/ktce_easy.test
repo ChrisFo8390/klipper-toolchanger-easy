@@ -1,0 +1,36 @@
+# KTC-E easy-additions (homing override, tool detection, crash detection, tap
+# activation, calibration macros) on Kalico with the modules in klippy/plugins.
+CONFIG ktce_easy.cfg
+DICTIONARY atmega2560.dict EBBT0=stm32g0b1.dict
+
+# The only tool probe is open, so the tool is found on connect
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 0}'
+
+# Homing override: toolchanger init, X/Y, then Z with the tool probe
+G28
+ASSERT TEST='{printer.toolhead.homed_axes == "xyz"}'
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+ASSERT TEST='{printer.toolchanger.status == "ready"}'
+
+# Probing and what builds on it
+QUERY_PROBE
+PROBE
+BED_MESH_CALIBRATE
+
+# Crash detection macros, tool detection macros
+START_CRASH_DETECTION
+STOP_CRASH_DETECTION
+VERIFY_TOOL_DETECTED T=0
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 0}'
+
+# Tool selection and parameters of the tool
+SELECT_TOOL T=0
+SET_TOOL_PARAMETER T=0 PARAMETER=gcode_z_offset VALUE=0.1
+ASSERT TEST='{printer["tool T0"].gcode_z_offset == 0.1}'
+
+# Offset macros read the result of tools_calibrate by index (Kalico has no last_x_result)
+CALIBRATE_MOVE_OVER_PROBE
+TOOL_LOCATE_SENSOR
+TOOL_CALIBRATE_TOOL_OFFSET
+_SAVE_TOOL_OFFSET T=0
+_SAVE_Z_TOOL_OFFSET T=0

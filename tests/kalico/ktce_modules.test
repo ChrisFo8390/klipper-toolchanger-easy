@@ -1,0 +1,28 @@
+# multi_fan, manual_rail and bed_thermal_adjust of KTC-E on Kalico.
+CONFIG ktce_modules.cfg
+DICTIONARY atmega2560.dict
+
+G28
+
+# Part cooling fans: M106 / M107 go to the active fan. Kalico applies the speed
+# when the print time gets there, which a simulator does not do, so only check
+# that the commands run and the fans are there.
+M106 S128
+ACTIVATE_FAN FAN=T1_partfan
+M106 S255
+ACTIVATE_FAN FAN=T0_partfan
+M107
+M400
+ASSERT TEST='{printer["multi_fan T0_partfan"].speed is defined}'
+ASSERT TEST='{printer["multi_fan T1_partfan"].speed is defined}'
+
+# A rail that is not part of the kinematics
+MANUAL_RAIL RAIL=liftbar ENABLE=1
+MANUAL_RAIL RAIL=liftbar HOME=1
+MANUAL_RAIL RAIL=liftbar MOVE=10
+MANUAL_RAIL RAIL=liftbar MOVE=0
+
+# The bed temperature with the thermal loss taken into account
+M140 S60
+ASSERT TEST='{printer.bed_thermal_adjust.target == 60}'
+M140 S0

@@ -1,0 +1,162 @@
+name: Kalico and Klipper
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Kalico moves on, find out when it breaks the modules
+    - cron: "17 4 * * 1"
+
+env:
+  IMAGE: ghcr.io/kalicocrew/kalico-ci:latest
+
+jobs:
+  installer:
+    name: install.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax of the scripts and modules
+        run: |
+          bash -n install.sh
+          bash -n tests/installer/test_install.sh
+          bash -n tests/kalico/run.sh
+          bash -n tests/klipper/run.sh
+          python3 -m py_compile klipper/extras/*.py
+      - name: Installer on fake Klipper and Kalico trees
+        run: bash tests/installer/test_install.sh
+
+  # The firmware dictionaries klippy needs to run, from the public CI image of
+  # Kalico. Only the dictionaries are used from the image.
+  dictionaries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract the dictionaries
+        run: |
+          docker pull "$IMAGE"
+          docker run --rm --entrypoint tar "$IMAGE" -C /ci_build -c dict | tar -x
+          ls dict | head -50
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dict
+          path: dict
+          retention-days: 3
+
+  kalico:
+    name: Kalico ${{ matrix.kalico }}, Python ${{ matrix.python }}
+    needs: dictionaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        kalico: [main]
+        python: ["3.9", "3.12"]
+        include:
+          # the version this was developed against
+          - kalico: 488b45d5511ef76826d0b0ba64da3793d2f2dc45
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ktce
+      - uses: actions/checkout@v4
+        with:
+          repository: KalicoCrew/kalico
+          ref: ${{ matrix.kalico }}
+          path: kalico
+      - uses: actions/download-artifact@v4
+        with:
+          name: dict
+          path: dict
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Requirements of klippy and the tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r kalico/scripts/klippy-requirements.txt
+          python -m pip install "pytest>=8.3.4"
+      - name: KTC-E on Kalico
+        run: bash ktce/tests/kalico/run.sh
+        env:
+          KALICO: ${{ github.workspace }}/kalico
+          DICTDIR: ${{ github.workspace }}/dict
+
+  # The code path for Klipper's own probe API must keep working
+  klipper:
+    name: Klipper master, Python ${{ matrix.python }}
+    needs: dictionaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ktce
+      - uses: actions/checkout@v4
+        with:
+          repository: Klipper3d/klipper
+          ref: master
+          path: klipper
+      - uses: actions/download-artifact@v4
+        with:
+          name: dict
+          path: dict
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Requirements of klippy
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r klipper/scripts/klippy-requirements.txt
+          python -m pip install -r ktce/requirements.txt
+      - name: KTC-E on Klipper
+        run: bash ktce/tests/klipper/run.sh
+        env:
+          KLIPPER: ${{ github.workspace }}/klipper
+          DICTDIR: ${{ github.workspace }}/dict
+
+  # Not a test of this branch: what the unmodified upstream does on Kalico.
+  # Fails when upstream starts to work on Kalico by itself.
+  upstream:
+    name: Unmodified upstream on Kalico (does not work)
+    needs: dictionaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ktce
+      - uses: actions/checkout@v4
+        with:
+          repository: jwellman80/klipper-toolchanger-easy
+          ref: main
+          path: upstream
+      - uses: actions/checkout@v4
+        with:
+          repository: KalicoCrew/kalico
+          ref: main
+          path: kalico
+      - uses: actions/download-artifact@v4
+        with:
+          name: dict
+          path: dict
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Requirements of klippy and the tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r kalico/scripts/klippy-requirements.txt
+          python -m pip install "pytest>=8.3.4"
+      - name: Upstream KTC-E on Kalico
+        run: bash ktce/tests/kalico/baseline.sh
+        env:
+          KALICO: ${{ github.workspace }}/kalico
+          DICTDIR: ${{ github.workspace }}/dict
+          UPSTREAM: ${{ github.workspace }}/upstream

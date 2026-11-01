@@ -1,0 +1,77 @@
+# KTC-E on Kalico: toolchanger, per-tool probes, Z homing, probing, bed mesh,
+# Z tilt and tool changes with the modules loaded from klippy/plugins.
+CONFIG ktce_basic.cfg
+DICTIONARY atmega2560.dict
+
+# The simulator reports every probe as open, so no tool is detected on its own
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == -1}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_probe is none}'
+LIST_PROBES
+
+# Home with the probe of tool 0
+SET_ACTIVE_TOOL_PROBE T=0
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 0}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_probe == "tool_probe T0"}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_probe_z_offset == 1.0}'
+G28
+ASSERT TEST='{printer.toolhead.homed_axes == "xyz"}'
+# Homing on the probe puts the toolhead at the z_offset of that probe (as with Kalico's own [probe])
+ASSERT TEST='{(printer.toolhead.position[2] - 1.0)|abs < 0.001}'
+G1 X100 Y100 Z10 F6000
+M400
+
+# The router is the default probe, the commands go to the active tool probe
+QUERY_PROBE
+ASSERT TEST='{printer.probe.last_query == False}'
+PROBE
+PROBE_ACCURACY SAMPLES=3
+# ... and every tool probe can be addressed on its own
+PROBE PROBE=T0
+PROBE PROBE=T1
+QUERY_PROBE PROBE=T1
+
+# Users of the default probe: Z tilt and bed mesh
+Z_TILT_ADJUST
+BED_MESH_CALIBRATE
+ASSERT TEST='{printer.bed_mesh.profile_name == "default"}'
+
+# Another tool with its own offsets
+SET_ACTIVE_TOOL_PROBE T=1
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 1}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_probe_z_offset == 1.5}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_probe_x_offset == 0.1}'
+G1 X100 Y100 Z10 F6000
+G28 Z
+ASSERT TEST='{printer.toolhead.homed_axes == "xyz"}'
+# ... with the z_offset of this probe
+ASSERT TEST='{(printer.toolhead.position[2] - 1.5)|abs < 0.001}'
+PROBE
+G1 Z10 F600
+
+# Tool changes through the toolchanger
+INITIALIZE_TOOLCHANGER T=0
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 0}'
+SELECT_TOOL T=1
+ASSERT TEST='{printer.toolchanger.tool_number == 1}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 1}'
+PROBE
+SELECT_TOOL T=0
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == 0}'
+G28 Z
+BED_MESH_CALIBRATE
+
+# Crash detection and detection of the active tool
+STOP_TOOL_PROBE_CRASH_DETECTION
+DETECT_ACTIVE_TOOL_PROBE
+ASSERT TEST='{printer.tool_probe_endstop.active_tool_number == -1}'
+
+# Nozzle calibration with Kalico's own tools_calibrate: the result is read by index
+ASSERT TEST='{printer.tools_calibrate.last_x_result is not defined}'
+SET_ACTIVE_TOOL_PROBE T=0
+G1 X100 Y100 Z10 F6000
+TOOL_LOCATE_SENSOR
+TOOL_CALIBRATE_TOOL_OFFSET
+ASSERT TEST='{printer.tools_calibrate.last_result[2] is defined}'
+TOOL_CALIBRATE_QUERY_PROBE

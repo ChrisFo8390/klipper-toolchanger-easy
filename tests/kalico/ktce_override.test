@@ -1,0 +1,22 @@
+# KTC-E's tools_calibrate (with TOOL_CALIBRATE_PROBE_OFFSET) in place of
+# Kalico's, through allow_plugin_override.
+CONFIG ktce_override.cfg
+DICTIONARY atmega2560.dict
+
+SET_ACTIVE_TOOL_PROBE T=0
+G28
+G1 X100 Y100 Z10 F6000
+M400
+
+# It is ours: it has the status fields of KTC-E
+ASSERT TEST='{printer.tools_calibrate.last_x_result is defined}'
+ASSERT TEST='{printer.tools_calibrate.last_probe_offset is defined}'
+
+# Locating a sensor and the offset of a tool work as with Kalico's
+TOOL_LOCATE_SENSOR
+ASSERT TEST='{printer.tools_calibrate.last_result[0] == printer.tools_calibrate.last_x_result}'
+TOOL_CALIBRATE_QUERY_PROBE
+
+# The nozzle probe offset runs on the classic probe API of Kalico
+TOOL_CALIBRATE_PROBE_OFFSET PROBE="tool_probe T0"
+ASSERT TEST='{printer.tools_calibrate.last_probe_offset is defined}'
