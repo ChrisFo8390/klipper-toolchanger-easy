@@ -2,9 +2,9 @@
 
 # Requires Klipper 0.13.0-707 or greater, or Kalico
 
-**Running Kalico?** The installer links the modules into `klippy/plugins`, so that Kalico can still be updated from
-Mainsail, and the tool probe modules work with Kalico's probe code. See [kalico.md](kalico.md), also if you installed
-with an older version of this script and Mainsail stopped offering Kalico updates.
+**Running Kalico?** The installer never replaces Kalico's own `tools_calibrate.py`, so Kalico can still be updated
+from Mainsail, and the tool probe modules work with Kalico's probe code. See [kalico.md](kalico.md), also if you
+installed with an older version of this script and Mainsail stopped offering Kalico updates.
 
 ## Please Read this before starting!
 The purpose of (yet another) fork of the Viesturz/klipper-toolchanger repo is to attempt to simplify the installation for StealthChanger users.  This repo combines the configuration, macros, and Python into a single repo.  It also outlines patterns for overriding configuration to ease installation and allow easier updates. 
@@ -21,7 +21,7 @@ All of the documentation for StealthChanger still applies and should be what you
 To install this plugin, run the installation script using the following command over SSH. This script will download this GitHub repository to your RaspberryPi home directory, and symlink the files in the Klipper extra folder.  It will also create copies of the user editable configuration and populate some example tools.  
 
 This script does the following:
-- symlinks the needed Python files into `klipper/klippy/extras` (Kalico: `klipper/klippy/plugins`, see [kalico.md](kalico.md))
+- symlinks the needed Python files into `klipper/klippy/extras`, except files that Klipper or Kalico has of its own (Kalico: `tools_calibrate.py`, see [kalico.md](kalico.md))
 - symlinks the gcode macros to `~/printer_data/config/toolchanger/readonly-configs`
 - copies some example tools into `~/printer_data/config/toolchanger/tools`
 - copies user editible config into `~/printer_data/config/toolchanger`
@@ -51,7 +51,7 @@ primary_branch: main
 ```
 
 ## Changelog
-* 2026.11.1 - Kalico support: install into `klippy/plugins` (Kalico stays updatable), tool probe modules for Kalico's probe code, see [kalico.md](kalico.md).
+* 2026.11.1 - Kalico support: the installer no longer replaces Kalico's own `tools_calibrate.py` (Kalico stays updatable), tool probe modules for Kalico's probe code, see [kalico.md](kalico.md).
 * 2026.1.25 - Example script for camera tool alignment.
 * 2025.12.26 - **Breaking change** Stop using Gcode offset for tool offsets. Uses a dedicated gcode transform instead.
 * 2025.12.25 - Use Bezier curves for rounded paths.

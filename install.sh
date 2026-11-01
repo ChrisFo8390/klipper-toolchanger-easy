@@ -5,17 +5,19 @@
 # Links the Python modules into Klipper, the macros into the configuration and
 # copies the files that you edit. Safe to run again.
 #
-# Klipper:  the modules are linked into klippy/extras.
-# Kalico:   the modules are linked into klippy/plugins instead. That folder is
-#           ignored by git, so Kalico stays "clean" and can be updated from
-#           Mainsail / Moonraker. Kalico already has a tools_calibrate.py of its
-#           own in klippy/extras; it is kept (see kalico.md for the exception).
+# The modules are linked into klippy/extras, where add-ons expect them (AFC
+# imports extras.toolchanger). A module that Klipper or Kalico has of its own,
+# a file that git tracks, is never replaced: Moonraker would see a changed
+# repository and refuse to update it. Kalico has a tools_calibrate.py, so that
+# one is not linked and Kalico's is used (see kalico.md for the exception).
 #
 # Options:
-#   --target auto|extras|plugins   where to link the modules (default auto: plugins on Kalico, extras otherwise)
+#   --target extras|plugins        where to link the modules (default extras).
+#                                  plugins is Kalico only: klippy/plugins is ignored by git, but
+#                                  add-ons that import extras.<module> do not find the modules there
 #   --z-probe tap|shuttle|none     how you probe Z, asked if you do not give it
-#   --override-tools-calibrate     Kalico only: also link our tools_calibrate.py into plugins
-#                                  (needs [danger_options] allow_plugin_override: True)
+#   --override-tools-calibrate     Kalico only: use our tools_calibrate.py instead of Kalico's, linked
+#                                  into plugins (needs [danger_options] allow_plugin_override: True)
 #   --no-requirements              do not install the Python requirements
 #   --no-restart                   do not restart Klipper
 #   --uninstall                    remove the links (and restore what an old install replaced), keep the configuration
@@ -50,7 +52,7 @@ MODE="install"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --target)                    TARGET="${2:?--target needs auto, extras or plugins}"; shift ;;
+        --target)                    TARGET="${2:?--target needs extras or plugins}"; shift ;;
         --z-probe)                   Z_PROBE="${2:?--z-probe needs tap, shuttle or none}"; shift ;;
         --override-tools-calibrate)  OVERRIDE_TOOLS_CALIBRATE="yes" ;;
         --no-requirements)           DO_REQUIREMENTS="no" ;;
@@ -71,7 +73,7 @@ done
 
 case "${TARGET}" in
     auto|extras|plugins) ;;
-    *) echo "[ERROR] --target must be auto, extras or plugins"; exit 1 ;;
+    *) echo "[ERROR] --target must be extras or plugins"; exit 1 ;;
 esac
 case "${Z_PROBE}" in
     ""|tap|shuttle|none) ;;
@@ -98,9 +100,14 @@ function has_plugin_override {
 
 function resolve_target {
     case "${TARGET}" in
-        extras|plugins) echo "${TARGET}" ;;
-        *) if is_kalico; then echo "plugins"; else echo "extras"; fi ;;
+        plugins) echo "plugins" ;;
+        *) echo "extras" ;;
     esac
+}
+
+# A module of Klipper / Kalico itself: git tracks it
+function is_part_of_host {
+    is_git_repo && is_tracked "klippy/extras/$1"
 }
 
 # True if the symlink $1 points into this repository
@@ -260,35 +267,78 @@ function z_probe_option {
     esac
 }
 
-# Links the Python modules into the folder where Klipper / Kalico loads them from.
-# $1: extras or plugins
-function link_modules {
-    local where="$1" dest file name
-    if [ "${where}" = "plugins" ]; then
-        dest="${PLUGINS}"
-        echo "[INSTALL] Linking modules into ${dest} (git ignores this folder, Kalico stays updatable)..."
-    else
-        dest="${EXTRAS}"
-        echo "[INSTALL] Linking modules into ${dest}..."
-    fi
-    mkdir -p "${dest}"
+# Links the Python modules into klippy/extras. A module that Klipper / Kalico has
+# of its own is not replaced, a link of an older install in its place is removed
+# and the file is restored from git.
+function link_modules_extras {
+    local file name
+    echo "[INSTALL] Linking modules into ${EXTRAS}..."
     for file in "${MODULES_PATH}"/*.py; do
         name="$(basename "${file}")"
-        if [ "${where}" = "plugins" ] && [ "${name}" = "tools_calibrate.py" ] && [ "${OVERRIDE_TOOLS_CALIBRATE}" != "yes" ]; then
-            if links_into_repo "${dest}/${name}"; then
+        if is_part_of_host "${name}"; then
+            if links_into_repo "${EXTRAS}/${name}"; then
+                rm -f "${EXTRAS}/${name}"
+                git -C "${KLIPPER_PATH}" checkout -- "klippy/extras/${name}"
+                echo "[CLEANUP] restored klippy/extras/${name} from git"
+            fi
+            if [ "${name}" = "tools_calibrate.py" ] && [ "${OVERRIDE_TOOLS_CALIBRATE}" = "yes" ]; then
+                continue
+            fi
+            echo "[INSTALL] ${name} skipped: ${KLIPPER_PATH} has its own (--override-tools-calibrate links ours on Kalico, see kalico.md)"
+            continue
+        fi
+        ln -sfn "${file}" "${EXTRAS}/${name}"
+    done
+}
+
+# Kalico only: modules in klippy/plugins. Git ignores that folder.
+function link_modules_plugins {
+    local file name
+    echo "[INSTALL] Linking modules into ${PLUGINS} (git ignores this folder)..."
+    mkdir -p "${PLUGINS}"
+    for file in "${MODULES_PATH}"/*.py; do
+        name="$(basename "${file}")"
+        if [ "${name}" = "tools_calibrate.py" ] && [ "${OVERRIDE_TOOLS_CALIBRATE}" != "yes" ]; then
+            if links_into_repo "${PLUGINS}/${name}"; then
                 echo "[INSTALL] ${name} stays linked from an earlier run with --override-tools-calibrate"
             else
                 echo "[INSTALL] ${name} skipped: Kalico has its own, see kalico.md (--override-tools-calibrate links ours)"
                 continue
             fi
         fi
-        if [ "${where}" = "extras" ] && [ -e "${dest}/${name}" ] && [ ! -L "${dest}/${name}" ] && is_git_repo && is_tracked "klippy/extras/${name}"; then
-            echo "[WARNING] ${dest}/${name} is part of ${KLIPPER_PATH} and will be replaced by a link: Moonraker will see changes and refuse to update it"
-            if is_kalico; then
-                echo "[WARNING] Use --target plugins"
-            fi
+        ln -sfn "${file}" "${PLUGINS}/${name}"
+    done
+}
+
+# Our tools_calibrate instead of the one of Kalico. Kalico loads it from
+# klippy/plugins and needs allow_plugin_override for a module of that name. It
+# stays when the installer runs again without the option.
+function link_override {
+    local name="tools_calibrate.py"
+    if [ "${OVERRIDE_TOOLS_CALIBRATE}" != "yes" ] && ! links_into_repo "${PLUGINS}/${name}"; then
+        return 0
+    fi
+    if ! is_kalico; then
+        echo "[ERROR] --override-tools-calibrate is for Kalico (klippy/plugins), ${KLIPPER_PATH} has none"
+        exit 1
+    fi
+    ln -sfn "${MODULES_PATH}/${name}" "${PLUGINS}/${name}"
+    echo "[INSTALL] ${name} of this repository linked into ${PLUGINS}, it replaces the one of Kalico"
+}
+
+# An earlier run linked the modules into klippy/plugins: they belong in klippy/extras
+function leave_plugins {
+    local file name
+    [ -d "${PLUGINS}" ] || return 0
+    for file in "${MODULES_PATH}"/*.py; do
+        name="$(basename "${file}")"
+        if [ "${name}" = "tools_calibrate.py" ]; then
+            continue
         fi
-        ln -sfn "${file}" "${dest}/${name}"
+        if links_into_repo "${PLUGINS}/${name}"; then
+            rm -f "${PLUGINS}/${name}"
+            echo "[MIGRATE] ${name} moved from klippy/plugins to klippy/extras"
+        fi
     done
 }
 
@@ -312,9 +362,9 @@ function unlink_modules {
     done
 }
 
-# The old installer linked everything into klippy/extras. On Kalico that replaced
-# its tools_calibrate.py (a change to a tracked file: Moonraker calls the
-# repository dirty and refuses to update it) and added untracked files.
+# For --target plugins. The old installer linked everything into klippy/extras.
+# On Kalico that replaced its tools_calibrate.py (a change to a tracked file:
+# Moonraker calls the repository dirty and refuses to update it).
 function migrate_to_plugins {
     echo "[MIGRATE] looking for links of an older install in ${EXTRAS}..."
     unlink_modules extras
@@ -331,18 +381,21 @@ function restart_klipper {
 
 function show_kalico_notes {
     echo ""
-    echo "[KALICO] Modules are in ${PLUGINS}; Kalico's own tools_calibrate is used."
-    echo "[KALICO] The macros work with it; TOOL_CALIBRATE_PROBE_OFFSET exists only in our tools_calibrate,"
-    echo "[KALICO] see kalico.md. To use ours add this to printer.cfg and run the install with --override-tools-calibrate:"
-    echo "[KALICO]     [danger_options]"
-    echo "[KALICO]     allow_plugin_override: True"
-    if [ "${OVERRIDE_TOOLS_CALIBRATE}" = "yes" ]; then
+    if [ "${WHERE}" = "plugins" ]; then
+        echo "[KALICO] Modules are in ${PLUGINS}; add-ons that import extras.<module> (AFC: extras.toolchanger) do not find them there."
+    else
+        echo "[KALICO] Modules are in ${EXTRAS}; Kalico's own files are not touched."
+    fi
+    if links_into_repo "${PLUGINS}/tools_calibrate.py"; then
+        echo "[KALICO] tools_calibrate of this repository replaces the one of Kalico, which needs allow_plugin_override in [danger_options]."
         if ! has_plugin_override; then
-            echo "[WARNING] --override-tools-calibrate: this Kalico does not know allow_plugin_override, update Kalico first"
+            echo "[WARNING] this Kalico does not know allow_plugin_override, update Kalico first"
         elif ! grep -rqs "allow_plugin_override" "${CONFIG_PATH}" 2>/dev/null; then
-            echo "[WARNING] --override-tools-calibrate is set but allow_plugin_override is not in your configuration:"
+            echo "[WARNING] allow_plugin_override is not in your configuration:"
             echo "[WARNING] Kalico will stop with \"Module 'tools_calibrate' found in both extras and plugins\"."
         fi
+    else
+        echo "[KALICO] Kalico's own tools_calibrate is used. TOOL_CALIBRATE_PROBE_OFFSET exists only in ours, see kalico.md."
     fi
 }
 
@@ -352,17 +405,19 @@ function show_status {
     echo "[CHECK] Klipper path : ${KLIPPER_PATH}"
     echo "[CHECK] flavour      : $(if is_kalico; then echo Kalico; else echo Klipper; fi)"
     echo "[CHECK] module target: ${where}"
-    local dest file name
-    if [ "${where}" = "plugins" ]; then dest="${PLUGINS}"; else dest="${EXTRAS}"; fi
+    local file name
     for file in "${MODULES_PATH}"/*.py; do
         name="$(basename "${file}")"
-        if links_into_repo "${dest}/${name}"; then
-            echo "[CHECK]   ${name}: linked in ${where}"
+        if links_into_repo "${EXTRAS}/${name}" && links_into_repo "${PLUGINS}/${name}"; then
+            echo "[CHECK]   ${name}: linked in extras AND plugins (Kalico refuses that, run the installer)"
+        elif links_into_repo "${EXTRAS}/${name}"; then
+            echo "[CHECK]   ${name}: linked in extras"
+        elif links_into_repo "${PLUGINS}/${name}"; then
+            echo "[CHECK]   ${name}: linked in plugins"
+        elif is_part_of_host "${name}"; then
+            echo "[CHECK]   ${name}: not linked, ${KLIPPER_PATH} has its own"
         else
-            echo "[CHECK]   ${name}: not linked in ${where}"
-        fi
-        if [ "${where}" = "plugins" ] && links_into_repo "${EXTRAS}/${name}"; then
-            echo "[CHECK]   ${name}: OLD link in extras (run the installer to clean it up)"
+            echo "[CHECK]   ${name}: not linked"
         fi
     done
     report_git_state
@@ -401,12 +456,14 @@ if [ "${WHERE}" = "plugins" ] && ! is_kalico; then
 fi
 if [ "${WHERE}" = "plugins" ]; then
     migrate_to_plugins
-    link_modules plugins
+    link_modules_plugins
 else
-    link_modules extras
+    leave_plugins
+    link_modules_extras
+    link_override
 fi
 z_probe_option
-if [ "${WHERE}" = "plugins" ]; then
+if is_kalico; then
     show_kalico_notes
 fi
 echo ""

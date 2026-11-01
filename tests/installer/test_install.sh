@@ -88,8 +88,9 @@ function all_modules_linked_in {
 }
 
 function no_module_linked_in {
-    local dir="$1" m
+    local dir="$1" skip="${2:-}" m
     for m in $(modules); do
+        [ "${m}" = "${skip}" ] && continue
         links_into_repo "${dir}/${m}" && return 1
     done
     return 0
@@ -105,17 +106,17 @@ echo "== module list"
 MODULES="$(modules | tr '\n' ' ')"
 echo "  ${MODULES}"
 check "tools_calibrate.py is one of the modules" test -f "${REPO}/klipper/extras/tools_calibrate.py"
+check "toolchanger.py is one of the modules (AFC imports extras.toolchanger)" test -f "${REPO}/klipper/extras/toolchanger.py"
 
 # ------------------------------------------------------------------------------
-echo "== Kalico: fresh install goes to klippy/plugins and leaves Kalico clean"
+echo "== Kalico: fresh install links into klippy/extras, except the file Kalico has, and leaves Kalico clean"
 K="${WORK}/kalico"; C="${WORK}/kalico-config"
 make_tree kalico "${K}"
 check "tree is clean before" is_clean "${K}"
 check "install succeeds" run_install "${K}" "${C}"
-check "all modules but tools_calibrate are linked in plugins" all_modules_linked_in "${K}/klippy/plugins" tools_calibrate.py
-check_not "tools_calibrate.py is not linked in plugins" test -e "${K}/klippy/plugins/tools_calibrate.py"
-check "nothing of ours is linked in extras" no_module_linked_in "${K}/klippy/extras"
+check "all modules but tools_calibrate are linked in extras" all_modules_linked_in "${K}/klippy/extras" tools_calibrate.py
 check "Kalico's tools_calibrate.py is still a regular file" test -f "${K}/klippy/extras/tools_calibrate.py" -a ! -L "${K}/klippy/extras/tools_calibrate.py"
+check "nothing is linked in plugins" no_module_linked_in "${K}/klippy/plugins"
 check "tracked files unchanged" is_clean "${K}"
 check_not "git describe is not dirty" describe_dirty "${K}"
 check "configuration: toolchanger.cfg linked" test -L "${C}/toolchanger/readonly-configs/toolchanger.cfg"
@@ -126,31 +127,37 @@ check "configuration: tap include linked" test -L "${C}/toolchanger/readonly-con
 echo "== Kalico: second run changes nothing, user files are kept"
 echo "# my change" >> "${C}/toolchanger/toolchanger-config.cfg"
 check "install succeeds again" run_install "${K}" "${C}"
-check "modules still linked" all_modules_linked_in "${K}/klippy/plugins" tools_calibrate.py
+check "modules still linked" all_modules_linked_in "${K}/klippy/extras" tools_calibrate.py
 check "tracked files unchanged" is_clean "${K}"
 check "user config not overwritten" grep -q "# my change" "${C}/toolchanger/toolchanger-config.cfg"
 
 echo "== Kalico: --check"
 OUT="$(KLIPPER_PATH="${K}" INSTALL_PATH="${REPO}" CONFIG_PATH="${C}" bash "${INSTALL}" --check 2>&1)"
 check "reports Kalico" grep -q "flavour      : Kalico" <<<"${OUT}"
-check "reports plugins as the target" grep -q "module target: plugins" <<<"${OUT}"
+check "reports toolchanger.py in extras" grep -q "toolchanger.py: linked in extras" <<<"${OUT}"
+check "reports that Kalico has its own tools_calibrate.py" grep -q "tools_calibrate.py: not linked, .* has its own" <<<"${OUT}"
 check "reports a clean tree" grep -q "can update it" <<<"${OUT}"
 
 echo "== Kalico: --override-tools-calibrate"
 check "install succeeds" run_install "${K}" "${C}" --override-tools-calibrate
-check "all modules linked in plugins" all_modules_linked_in "${K}/klippy/plugins"
+check "ours is linked in plugins" links_into_repo "${K}/klippy/plugins/tools_calibrate.py"
+check "the other modules stay in extras" all_modules_linked_in "${K}/klippy/extras" tools_calibrate.py
+check "only that one is in plugins" no_module_linked_in "${K}/klippy/plugins" tools_calibrate.py
 check "Kalico's tools_calibrate.py untouched" is_clean "${K}"
 check "install without the option keeps our tools_calibrate" run_install "${K}" "${C}"
 check "... still linked" links_into_repo "${K}/klippy/plugins/tools_calibrate.py"
+OUT="$(KLIPPER_PATH="${K}" INSTALL_PATH="${REPO}" CONFIG_PATH="${C}" bash "${INSTALL}" --check 2>&1)"
+check "--check reports it in plugins" grep -q "tools_calibrate.py: linked in plugins" <<<"${OUT}"
 
 echo "== Kalico: --uninstall"
 check "uninstall succeeds" run_install "${K}" "${C}" --uninstall
+check "no module linked in extras" no_module_linked_in "${K}/klippy/extras"
 check "no module linked in plugins" no_module_linked_in "${K}/klippy/plugins"
 check "tracked files unchanged" is_clean "${K}"
 check "configuration is kept" test -f "${C}/toolchanger/toolchanger-config.cfg"
 
 # ------------------------------------------------------------------------------
-echo "== Kalico: an install of the old installer is migrated"
+echo "== Kalico: an install of the old installer is migrated (the update to Kalico was blocked)"
 K="${WORK}/kalico-legacy"; C="${WORK}/kalico-legacy-config"
 make_tree kalico "${K}"
 legacy_install "${K}"
@@ -161,8 +168,28 @@ check "install succeeds" run_install "${K}" "${C}"
 check "Kalico is clean again" is_clean "${K}"
 check_not "git describe is not dirty" describe_dirty "${K}"
 check "Kalico's tools_calibrate.py is back" grep -q "kalico's own" "${K}/klippy/extras/tools_calibrate.py"
-check "no old links in extras" no_module_linked_in "${K}/klippy/extras"
+check "the other modules stay linked in extras" all_modules_linked_in "${K}/klippy/extras" tools_calibrate.py
+check "nothing is linked in plugins" no_module_linked_in "${K}/klippy/plugins"
+
+echo "== Kalico: an install that used klippy/plugins is moved back to klippy/extras (add-ons import extras.toolchanger)"
+K="${WORK}/kalico-fromplugins"; C="${WORK}/kalico-fromplugins-config"
+make_tree kalico "${K}"
+check "install into plugins succeeds" run_install "${K}" "${C}" --target plugins
 check "modules are in plugins" all_modules_linked_in "${K}/klippy/plugins" tools_calibrate.py
+check "install succeeds" run_install "${K}" "${C}"
+check "modules are in extras" all_modules_linked_in "${K}/klippy/extras" tools_calibrate.py
+check "plugins is empty again" no_module_linked_in "${K}/klippy/plugins"
+check "Kalico is clean" is_clean "${K}"
+
+echo "== Kalico: a module that Kalico gets later is not replaced"
+K="${WORK}/kalico-newmodule"; C="${WORK}/kalico-newmodule-config"
+make_tree kalico "${K}"
+echo "# kalico's own toolchanger" > "${K}/klippy/extras/toolchanger.py"
+git -C "${K}" add -A; git -C "${K}" commit -q -m "kalico gets a toolchanger"
+check "install succeeds" run_install "${K}" "${C}"
+check "Kalico's toolchanger.py is untouched" grep -q "kalico's own toolchanger" "${K}/klippy/extras/toolchanger.py"
+check "Kalico is clean" is_clean "${K}"
+check "the other modules are linked" links_into_repo "${K}/klippy/extras/tool.py"
 
 echo "== Kalico: links that do not belong to us are left alone"
 K="${WORK}/kalico-other"; C="${WORK}/kalico-other-config"
@@ -175,6 +202,19 @@ check "install succeeds" run_install "${K}" "${C}"
 check "other links untouched" test -L "${K}/klippy/extras/mine.py"
 
 # ------------------------------------------------------------------------------
+echo "== Kalico: --target plugins"
+K="${WORK}/kalico-plugins"; C="${WORK}/kalico-plugins-config"
+make_tree kalico "${K}"
+legacy_install "${K}"
+check "install succeeds" run_install "${K}" "${C}" --target plugins
+check "all modules but tools_calibrate are linked in plugins" all_modules_linked_in "${K}/klippy/plugins" tools_calibrate.py
+check "nothing of ours is linked in extras" no_module_linked_in "${K}/klippy/extras"
+check "Kalico's tools_calibrate.py is back" grep -q "kalico's own" "${K}/klippy/extras/tools_calibrate.py"
+check "Kalico is clean" is_clean "${K}"
+check "--override-tools-calibrate adds ours" run_install "${K}" "${C}" --target plugins --override-tools-calibrate
+check "... in plugins" links_into_repo "${K}/klippy/plugins/tools_calibrate.py"
+
+# ------------------------------------------------------------------------------
 echo "== Klipper: modules go to klippy/extras as before"
 K="${WORK}/klipper"; C="${WORK}/klipper-config"
 make_tree klipper "${K}"
@@ -182,14 +222,9 @@ check "install succeeds" run_install "${K}" "${C}"
 check "all modules are linked in extras" all_modules_linked_in "${K}/klippy/extras"
 check_not "no plugins folder is created" test -e "${K}/klippy/plugins"
 check "--target plugins is refused" bash -c "! KLIPPER_PATH='${K}' INSTALL_PATH='${REPO}' CONFIG_PATH='${C}' bash '${INSTALL}' --no-restart --no-requirements --z-probe tap --target plugins"
+check "--override-tools-calibrate is refused" bash -c "! KLIPPER_PATH='${K}' INSTALL_PATH='${REPO}' CONFIG_PATH='${C}' bash '${INSTALL}' --no-restart --no-requirements --z-probe tap --override-tools-calibrate"
 check "--uninstall removes the links" run_install "${K}" "${C}" --uninstall
 check "no module linked in extras" no_module_linked_in "${K}/klippy/extras"
-
-echo "== Kalico: --target extras puts everything where the old installer did"
-K="${WORK}/kalico-extras"; C="${WORK}/kalico-extras-config"
-make_tree kalico "${K}"
-check "install succeeds" run_install "${K}" "${C}" --target extras
-check "all modules are linked in extras" all_modules_linked_in "${K}/klippy/extras"
 
 # ------------------------------------------------------------------------------
 echo "== Z probe on a shuttle"
@@ -198,6 +233,13 @@ make_tree kalico "${K}"
 check "install succeeds" bash -c "KLIPPER_PATH='${K}' INSTALL_PATH='${REPO}' CONFIG_PATH='${C}' bash '${INSTALL}' --no-restart --no-requirements --z-probe shuttle"
 check "scanner include linked" bash -c "readlink '${C}/toolchanger/readonly-configs/toolchanger-include.cfg' | grep -q toolchanger-include_scanner.cfg"
 check "shuttle tool configs copied" test -f "${C}/toolchanger/tools/example_T0.cfg"
+
+echo "== Z probe configuration left alone"
+K="${WORK}/kalico-none"; C="${WORK}/kalico-none-config"
+make_tree kalico "${K}"
+check "install succeeds" bash -c "KLIPPER_PATH='${K}' INSTALL_PATH='${REPO}' CONFIG_PATH='${C}' bash '${INSTALL}' --no-restart --no-requirements --z-probe none"
+check_not "no include is created" test -e "${C}/toolchanger/readonly-configs/toolchanger-include.cfg"
+check_not "no tool configs are copied" test -e "${C}/toolchanger/tools/example_T0.cfg"
 
 echo "== Errors"
 check "no Klipper at KLIPPER_PATH" bash -c "! KLIPPER_PATH='${WORK}/nothing' INSTALL_PATH='${REPO}' CONFIG_PATH='${WORK}/c' bash '${INSTALL}' --no-restart --no-requirements --z-probe tap"

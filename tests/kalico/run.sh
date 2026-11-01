@@ -1,8 +1,9 @@
 #!/bin/bash
 #
 # Runs the KTC-E tests on a Kalico checkout, set up the way a user's printer is:
-# install.sh links the modules into klippy/plugins and the configuration into a
-# config folder, then Kalico's own test harness runs klippy on the test configs.
+# install.sh links the modules into klippy/extras (all but the tools_calibrate
+# that Kalico has) and the configuration into a config folder, then Kalico's own
+# test harness runs klippy on the test configs.
 #
 #   KALICO=/path/to/kalico DICTDIR=/path/to/dict tests/kalico/run.sh
 #
@@ -64,20 +65,32 @@ fi
 kalico_state
 git -C "${KALICO}" describe --always --tags --long --dirty
 
-step "Install (migrates the old links, links the modules into klippy/plugins)"
+step "Install (puts back what the old installer replaced, links the other modules into klippy/extras)"
 install_ktce
 assert_clean "after the install"
 for f in "${REPO}"/klipper/extras/*.py; do
     name="$(basename "${f}")"
-    if [ -L "${KALICO}/klippy/extras/${name}" ]; then
-        fail "old link left in klippy/extras: ${name}"
-    fi
-    if [ "${name}" != "tools_calibrate.py" ] && [ ! -L "${KALICO}/klippy/plugins/${name}" ]; then
-        fail "${name} is not linked into klippy/plugins"
+    if [ "${name}" = "tools_calibrate.py" ]; then
+        if [ -L "${KALICO}/klippy/extras/${name}" ] || [ -e "${KALICO}/klippy/plugins/${name}" ]; then
+            fail "Kalico's own ${name} was replaced"
+        fi
+    elif [ ! -L "${KALICO}/klippy/extras/${name}" ]; then
+        fail "${name} is not linked into klippy/extras"
+    elif [ -e "${KALICO}/klippy/plugins/${name}" ]; then
+        fail "${name} is also in klippy/plugins, Kalico refuses that"
     fi
 done
 install_ktce
 assert_clean "after the second install"
+
+step "Add-ons import our modules as extras.<name> (AFC: from extras.toolchanger import DETECT_PRESENT)"
+(cd "${KALICO}" && "${PYTHON}" -c "
+import klippy.compat
+klippy.compat.install()
+from extras.toolchanger import DETECT_PRESENT
+from extras.tool import Tool
+print('extras.toolchanger and extras.tool are found, DETECT_PRESENT =', DETECT_PRESENT)
+")
 
 step "Prepare the tests"
 cp "${TESTS}"/ktce_*.cfg "${TESTS}"/ktce_*.test "${TEST_DIR}/"
@@ -118,10 +131,30 @@ expect_klippy_failure() {
 step "The smaller modules: multi_fan, manual_rail, bed_thermal_adjust"
 run_tests test/klippy/ktce_modules.test
 
+step "The same with the modules in klippy/plugins (--target plugins)"
+install_ktce --target plugins
+assert_clean "with the modules in klippy/plugins"
+for f in "${REPO}"/klipper/extras/*.py; do
+    name="$(basename "${f}")"
+    if [ "${name}" != "tools_calibrate.py" ] && { [ ! -L "${KALICO}/klippy/plugins/${name}" ] || [ -L "${KALICO}/klippy/extras/${name}" ]; }; then
+        fail "${name} is not only in klippy/plugins"
+    fi
+done
+run_tests test/klippy/ktce_basic.test test/klippy/ktce_modules.test
+step "... and back to klippy/extras"
+install_ktce
+assert_clean "back in klippy/extras"
+for f in "${REPO}"/klipper/extras/*.py; do
+    name="$(basename "${f}")"
+    if [ -e "${KALICO}/klippy/plugins/${name}" ]; then
+        fail "${name} is still in klippy/plugins"
+    fi
+done
+
 step "A z_offset outside of the range of the Z stepper is refused when the configuration is loaded"
 expect_klippy_failure ktce_range.cfg "outside of position_min"
 
-step "Our tools_calibrate without allow_plugin_override is refused by Kalico (so install.sh keeps it out)"
+step "Our tools_calibrate without allow_plugin_override is refused by Kalico (so install.sh only links it on request)"
 install_ktce --override-tools-calibrate
 expect_klippy_failure ktce_basic.cfg "found in both extras and plugins"
 
