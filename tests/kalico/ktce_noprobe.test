@@ -1,0 +1,25 @@
+# Printer without tool probes: tool changes with the stock pickup and dropoff paths
+# (rounded_path), and the "calibrate all tools" macro of KTC-E with Kalico's own
+# tools_calibrate. CONFIG ktce_noprobe.cfg
+CONFIG ktce_noprobe.cfg
+DICTIONARY atmega2560.dict
+
+G28
+ASSERT TEST='{printer.toolhead.homed_axes == "xyz"}'
+
+# Tool changes the way a print does them
+SELECT_TOOL T=0
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+SELECT_TOOL T=1
+ASSERT TEST='{printer.toolchanger.tool_number == 1}'
+SELECT_TOOL T=0
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+
+# Calibrate all tools: T0 locates the sensor, the others measure their offset to it
+CALIBRATE_ALL_OFFSETS
+ASSERT TEST='{printer.toolchanger.tool_number == 0}'
+# ... and the offset of T1 was handed to the tool to be saved to the configuration
+ASSERT TEST='{"tool T1" in printer.configfile.save_config_pending_items}'
+ASSERT TEST='{printer["tool T1"].gcode_x_offset == printer.tools_calibrate.last_result[0]}'
+ASSERT TEST='{printer["tool T1"].gcode_y_offset == printer.tools_calibrate.last_result[1]}'
+ASSERT TEST='{printer["tool T1"].gcode_z_offset == printer.tools_calibrate.last_result[2]}'
